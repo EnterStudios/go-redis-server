@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strconv"
 	"strings"
 )
 
@@ -21,7 +22,7 @@ func parseRequest(conn io.ReadCloser) (*Request, error) {
 
 	// Multiline request:
 	if line[0] == '*' {
-		if _, err := fmt.Sscanf(line, "*%d\r\n", &argsCount); err != nil {
+		if argsCount, err = strconv.Atoi(string(line[1 : len(line)-2])); err != nil {
 			return nil, malformed("*<numberOfArguments>", line)
 		}
 		// All next lines are pairs of:
@@ -71,7 +72,7 @@ func readArgument(r *bufio.Reader) ([]byte, error) {
 		return nil, malformed("$<argumentLength>", line)
 	}
 	var argSize int
-	if _, err := fmt.Sscanf(line, "$%d\r\n", &argSize); err != nil {
+	if argSize, err = strconv.Atoi(string(line[1 : len(line)-2])); err != nil {
 		return nil, malformed("$<argumentSize>", line)
 	}
 
@@ -86,13 +87,9 @@ func readArgument(r *bufio.Reader) ([]byte, error) {
 		return nil, malformedLength(argSize, len(data))
 	}
 
-	// Now check for trailing CR
-	if b, err := r.ReadByte(); err != nil || b != '\r' {
-		return nil, malformedMissingCRLF()
-	}
-
-	// And LF
-	if b, err := r.ReadByte(); err != nil || b != '\n' {
+	// Now check for trailing CR and LF
+	b := make([]byte, 2)
+	if n, err := r.Read(b); err != nil || n != 2 || b[0] != '\r' || b[1] != '\n' {
 		return nil, malformedMissingCRLF()
 	}
 
